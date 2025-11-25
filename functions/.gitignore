@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Local config
+.runtimeconfig.json
+
+# Logs
+*.log
+firebase-debug.log
+
+# Environment
+.env
+.env.local
