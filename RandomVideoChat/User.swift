@@ -1,6 +1,10 @@
 import Foundation
 import FirebaseFirestore
 
+// MARK: - Gender
+/// 사용자 성별을 나타내는 열거형
+/// - 매칭 필터링에 사용
+/// - Codable 지원으로 Firestore 저장 가능
 enum Gender: String, CaseIterable, Codable {
     case male = "male"
     case female = "female"
@@ -24,6 +28,10 @@ enum Gender: String, CaseIterable, Codable {
     }
 }
 
+// MARK: - User Model
+/// 사용자 정보를 담는 데이터 모델
+/// - Firestore users 컬렉션에 저장
+/// - 하트 개수, 차단 목록, 성별 정보 포함
 struct User: Codable {
     let uid: String
     let email: String?

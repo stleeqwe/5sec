@@ -3,7 +3,13 @@ import UIKit
 import FirebaseDatabase
 import FirebaseAuth
 
-class MatchingManager: ObservableObject {
+// MARK: - Matching Manager
+/// 사용자 매칭 시스템을 관리하는 싱글톤 매니저
+/// - Firebase Realtime Database 기반 매칭 큐 관리
+/// - 성별 기반 필터링 및 버킷 시스템
+/// - 원자적 락 기반 경쟁 조건 해결
+/// - 통화 상태 동기화 및 종료 처리
+final class MatchingManager: ObservableObject {
     static let shared = MatchingManager()
     private let database = Database.database()
     
@@ -64,7 +70,7 @@ class MatchingManager: ObservableObject {
     }
     
     // MARK: - Public Methods
-    // MARK: - Public Methods 섹션에 추가
+
     func removeFromQueueIfNeeded(userId: String) {
         // VideoCall이 시작되면 큐에서 제거
         removeFromQueue(userId: userId)

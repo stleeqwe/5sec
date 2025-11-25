@@ -2,9 +2,12 @@ import Foundation
 import FirebaseFunctions
 import FirebaseDatabase
 
-/// Agora 토큰 관리 서비스
-/// Firebase Cloud Functions를 통해 안전하게 토큰을 생성하고 갱신합니다.
-class AgoraTokenService {
+// MARK: - Agora Token Service
+/// Agora RTC 토큰을 관리하는 싱글톤 서비스
+/// - Firebase Cloud Functions를 통한 안전한 토큰 생성
+/// - 토큰 캐싱 및 자동 갱신
+/// - 만료 전 자동 갱신 타이머 관리
+final class AgoraTokenService {
     static let shared = AgoraTokenService()
 
     private lazy var functions = Functions.functions()

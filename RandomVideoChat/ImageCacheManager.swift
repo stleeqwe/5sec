@@ -1,6 +1,12 @@
 import UIKit
 import Foundation
 
+// MARK: - Image Cache Manager
+/// 이미지 캐싱을 담당하는 싱글톤 매니저
+/// - 2단계 캐싱 (메모리 + 디스크)
+/// - 자동 캐시 정리 (7일 이상된 파일)
+/// - 메모리 경고 시 자동 정리
+/// - 비동기 디스크 I/O 처리
 final class ImageCacheManager {
     static let shared = ImageCacheManager()
     

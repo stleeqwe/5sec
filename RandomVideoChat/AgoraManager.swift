@@ -2,7 +2,13 @@ import SwiftUI
 import AgoraRtcKit
 import AVFoundation
 
-class AgoraManager: NSObject, ObservableObject {
+// MARK: - Agora Manager
+/// Agora RTC 엔진을 관리하는 싱글톤 매니저
+/// - 실시간 영상/음성 통화 관리
+/// - 토큰 기반 인증 및 자동 갱신
+/// - 네트워크 상태에 따른 적응형 비디오 품질
+/// - 연결 상태 모니터링 및 자동 재연결
+final class AgoraManager: NSObject, ObservableObject {
     static let shared = AgoraManager()
 
     // Agora 설정 - Info.plist에서 안전하게 가져오기

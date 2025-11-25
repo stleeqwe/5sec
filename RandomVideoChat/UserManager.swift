@@ -4,7 +4,13 @@ import FirebaseAuth
 import FirebaseFirestore
 import FirebaseDatabase
 
-class UserManager: ObservableObject {
+// MARK: - User Manager
+/// 사용자 데이터 및 인증 상태를 관리하는 싱글톤 매니저
+/// - 사용자 프로필 로딩 및 저장
+/// - 하트 관리 (증가, 감소, 실시간 동기화)
+/// - 차단 목록 관리
+/// - 매칭 이력 추적
+final class UserManager: ObservableObject {
     static let shared = UserManager()
     private let db = Firestore.firestore()
 

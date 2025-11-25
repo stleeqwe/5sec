@@ -3,7 +3,13 @@ import Firebase
 import FirebaseAuth
 import FirebaseFirestore
 
-class ContentModerationManager: ObservableObject {
+// MARK: - Content Moderation Manager
+/// 콘텐츠 및 사용자 안전을 관리하는 싱글톤 매니저
+/// - 사용자 신고 시스템
+/// - 자동 제재 시스템 (신고 임계값 기반)
+/// - 계정 정지 및 신뢰도 점수 관리
+/// - 신규 사용자 제한 기능
+final class ContentModerationManager: ObservableObject {
     static let shared = ContentModerationManager()
     private let db = Firestore.firestore()
     

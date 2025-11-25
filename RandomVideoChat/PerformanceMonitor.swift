@@ -5,7 +5,13 @@ import Network
 import FirebasePerformance
 #endif
 
-class PerformanceMonitor: ObservableObject {
+// MARK: - Performance Monitor
+/// 앱 성능 및 네트워크 상태를 모니터링하는 싱글톤
+/// - 네트워크 연결 상태 및 품질 모니터링
+/// - 메모리 사용량 추적
+/// - 매칭/통화 성능 메트릭 수집
+/// - Firebase Performance 통합 지원
+final class PerformanceMonitor: ObservableObject {
     static let shared = PerformanceMonitor()
 
     // 네트워크 모니터링

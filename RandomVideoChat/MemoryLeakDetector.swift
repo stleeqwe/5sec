@@ -3,6 +3,11 @@ import UIKit
 import SwiftUI
 
 #if DEBUG
+// MARK: - Memory Leak Detector
+/// 메모리 누수를 감지하는 디버그 전용 유틸리티
+/// - 약한 참조로 객체 추적
+/// - 주기적 누수 체크 및 경고
+/// - DEBUG 빌드에서만 활성화
 final class MemoryLeakDetector {
     static let shared = MemoryLeakDetector()
     private var trackingObjects: [WeakObject] = []
