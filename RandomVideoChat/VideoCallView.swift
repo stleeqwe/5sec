@@ -266,6 +266,49 @@ struct VideoCallView: View {
                 .padding(.bottom, 65)
             }
 
+            // 연결 에러 알림 배너
+            if let error = agoraManager.connectionError {
+                VStack {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.yellow)
+                        Text(error)
+                            .font(.system(size: 14))
+                            .foregroundColor(.white)
+                        Spacer()
+                        Button(action: {
+                            // 에러 메시지 닫기
+                            agoraManager.connectionError = nil
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(Color.red.opacity(0.8))
+                    .cornerRadius(10)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 100)
+
+                    Spacer()
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .animation(.easeInOut, value: agoraManager.connectionError)
+            }
+
+            // 네트워크 품질 표시 (DEBUG 모드)
+            #if DEBUG
+            VStack {
+                HStack {
+                    Spacer()
+                    NetworkQualityIndicator()
+                        .padding(.trailing, 20)
+                        .padding(.top, 50)
+                }
+                Spacer()
+            }
+            #endif
         }
         .onAppear {
             setupVideoCall()
@@ -353,8 +396,8 @@ struct VideoCallView: View {
         }
         
         // 타이머 정리
-        timer?.invalidate()
-        
+        stopTimer()
+
         // Agora 연결 종료
         AgoraManager.shared.endCall()
         
@@ -539,15 +582,34 @@ struct VideoCallView: View {
     }
 
     func startTimer() {
+        // 기존 타이머 정리
         timer?.invalidate()
+        timer = nil
+
         isTimerStarted = true
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+
+        // 타이머 생성 - @State 변수를 안전하게 캡처
+        let newTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [self] currentTimer in
+            // 통화 종료 중이면 타이머 중지
+            guard !isCallEnding else {
+                currentTimer.invalidate()
+                return
+            }
+
             if timeRemaining > 0 {
                 timeRemaining -= 1
             } else {
+                currentTimer.invalidate()
                 endVideoCall()
             }
         }
+        timer = newTimer
+    }
+
+    func stopTimer() {
+        timer?.invalidate()
+        timer = nil
+        isTimerStarted = false
     }
 
     func endVideoCall() {
@@ -588,12 +650,52 @@ struct VideoCallView: View {
             print("❌ 차단 실패: 상대방 ID가 없음")
             return
         }
-        
+
         // 강화된 신고 및 차단 (자동 신고 포함)
         UserManager.shared.reportAndBlockUser(opponentUserId, reason: "사용자 차단")
         print("✅ 사용자 신고 및 차단: \(opponentUserId)")
-        
+
         // 차단 후 즉시 통화 종료
         endVideoCall()
+    }
+}
+
+// MARK: - Network Quality Indicator
+struct NetworkQualityIndicator: View {
+    @StateObject private var performanceMonitor = PerformanceMonitor.shared
+
+    var body: some View {
+        HStack(spacing: 4) {
+            // 신호 바
+            ForEach(0..<3, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(barColor(for: index))
+                    .frame(width: 4, height: CGFloat(8 + index * 4))
+            }
+
+            // 연결 타입
+            Text(performanceMonitor.connectionType.description)
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.8))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.black.opacity(0.5))
+        .cornerRadius(8)
+    }
+
+    private func barColor(for index: Int) -> Color {
+        let quality = performanceMonitor.currentNetworkQuality
+
+        switch quality {
+        case .excellent:
+            return .green
+        case .good:
+            return index < 2 ? .yellow : .gray.opacity(0.3)
+        case .poor:
+            return index < 1 ? .red : .gray.opacity(0.3)
+        case .unknown:
+            return .gray.opacity(0.3)
+        }
     }
 }

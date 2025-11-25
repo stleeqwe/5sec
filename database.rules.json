@@ -2,38 +2,45 @@
   "rules": {
     ".read": false,
     ".write": false,
-    
+
     "matching_queue": {
       ".indexOn": ["bucket", "timestamp", "status", "gender", "preferredGender", "randomSeed"],
-      "$bucket": {
-        ".read": "auth != null && (data.child(auth.uid).exists() || root.child('matching_queue').child($bucket).child(auth.uid).exists())",
-        "$userId": {
-          ".indexOn": ["status", "matchId", "timestamp"],
-          ".read": "auth != null && auth.uid == $userId",
-          ".write": "auth != null && auth.uid == $userId",
-          ".validate": "newData.hasChildren(['gender', 'preferredGender', 'timestamp', 'uid']) && newData.child('uid').val() == auth.uid"
-        }
+      "$userId": {
+        ".indexOn": ["status", "matchId", "timestamp", "bucket"],
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid == $userId"
       }
     },
-    
+
     "matching_locks": {
       "$lockKey": {
         ".read": "auth != null",
-        ".write": "auth != null",
-        ".validate": "newData.hasChildren(['userId', 'timestamp']) && newData.child('userId').val() == auth.uid"
+        ".write": "auth != null"
       }
     },
-    
-    "active_matches": {
-      ".indexOn": ["status", "timestamp", "user1Id", "user2Id"],
+
+    "matches": {
+      ".indexOn": ["status", "timestamp", "user1", "user2"],
       "$matchId": {
-        ".indexOn": ["timeRemaining", "endedBy", "status"],
-        ".read": "auth != null && (data.child('user1Id').val() == auth.uid || data.child('user2Id').val() == auth.uid)",
-        ".write": "auth != null && (data.child('user1Id').val() == auth.uid || data.child('user2Id').val() == auth.uid || root.child('matching_queue').hasChild(auth.uid))",
-        ".validate": "newData.hasChildren(['user1Id', 'user2Id', 'channelName', 'status']) && (newData.child('user1Id').val() == auth.uid || newData.child('user2Id').val() == auth.uid)"
+        ".indexOn": ["timeRemaining", "status"],
+        ".read": "auth != null && (data.child('user1').val() == auth.uid || data.child('user2').val() == auth.uid)",
+        ".write": "auth != null && (data.child('user1').val() == auth.uid || data.child('user2').val() == auth.uid || !data.exists())",
+        "endedBy": {
+          "$oderId": {
+            ".write": "auth != null && (root.child('matches').child($matchId).child('user1').val() == auth.uid || root.child('matches').child($matchId).child('user2').val() == auth.uid)"
+          }
+        }
       }
     },
-    
+
+    "presence": {
+      ".indexOn": ["online", "lastSeen"],
+      "$userId": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid == $userId"
+      }
+    },
+
     "notifications": {
       "$userId": {
         ".read": "auth != null && auth.uid == $userId",
@@ -45,19 +52,9 @@
         },
         "suspension": {
           "$notificationId": {
-            ".write": "auth != null",
             ".validate": "newData.hasChildren(['type', 'title', 'message', 'timestamp', 'isRead'])"
           }
         }
-      }
-    },
-    
-    "user_presence": {
-      ".indexOn": ["online", "lastSeen"],
-      "$userId": {
-        ".read": "auth != null",
-        ".write": "auth != null && auth.uid == $userId",
-        ".validate": "newData.hasChild('lastSeen')"
       }
     }
   }

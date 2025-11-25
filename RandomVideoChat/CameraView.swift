@@ -8,12 +8,38 @@ struct CameraView: UIViewRepresentable {
         var parent: CameraView
         var captureSession: AVCaptureSession?
         var currentCamera: AVCaptureDevice?
-        
+        private var isSessionRunning = false
+
         init(_ parent: CameraView) {
             self.parent = parent
             super.init()
         }
-        
+
+        deinit {
+            stopSession()
+            print("📷 CameraView.Coordinator deinit - 세션 정리됨")
+        }
+
+        func stopSession() {
+            guard isSessionRunning, let session = captureSession else { return }
+
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                session.stopRunning()
+                self?.isSessionRunning = false
+                print("📷 카메라 세션 중지됨")
+            }
+        }
+
+        func startSession() {
+            guard !isSessionRunning, let session = captureSession else { return }
+
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                session.startRunning()
+                self?.isSessionRunning = true
+                print("📷 카메라 세션 시작됨")
+            }
+        }
+
         func setupCamera() {
             print("📷 카메라 설정 시작...")
             captureSession = AVCaptureSession()
@@ -121,15 +147,15 @@ struct CameraView: UIViewRepresentable {
         print("📷 setupPreviewLayer: 프리뷰 레이어 추가됨 - sublayers count: \(view.layer.sublayers?.count ?? 0)")
         
         // 세션 시작
-        if !session.isRunning {
-            DispatchQueue.global(qos: .userInitiated).async {
-                print("📷 setupPreviewLayer: 세션 시작")
-                session.startRunning()
-                print("📷 setupPreviewLayer: 세션 실행 중: \(session.isRunning)")
-            }
-        }
+        context.coordinator.startSession()
     }
-    
+
+    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+        // 뷰가 제거될 때 세션 정리
+        coordinator.stopSession()
+        print("📷 dismantleUIView - 세션 정리됨")
+    }
+
     func updateUIView(_ uiView: UIView, context: Context) {
         print("📷 updateUIView 호출됨 - frame: \(uiView.bounds)")
         

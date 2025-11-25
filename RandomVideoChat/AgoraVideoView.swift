@@ -3,95 +3,148 @@ import AgoraRtcKit
 
 struct AgoraVideoView: UIViewRepresentable {
     let isLocal: Bool
-    @StateObject private var agoraManager = AgoraManager.shared
-    
+
+    // Coordinator를 통해 상태 변화 추적
+    func makeCoordinator() -> Coordinator {
+        Coordinator(isLocal: isLocal)
+    }
+
     func makeUIView(context: Context) -> UIView {
-        print("🎥 AgoraVideoView 생성: \(isLocal ? "로컬" : "원격")")
-        
-        let view = UIView()
-        view.backgroundColor = .black
-        
-        // 초기 뷰 설정
-        updateVideoView(view)
-        
-        return view
+        let containerView = UIView()
+        containerView.backgroundColor = .black
+        containerView.tag = isLocal ? 100 : 200
+
+        // 초기 설정
+        context.coordinator.setupInitialView(containerView)
+
+        return containerView
     }
-    
+
     func updateUIView(_ uiView: UIView, context: Context) {
-        updateVideoView(uiView)
+        context.coordinator.updateVideoView(uiView)
     }
-    
-    private func updateVideoView(_ containerView: UIView) {
-        // 기존 서브뷰 제거
-        containerView.subviews.forEach { $0.removeFromSuperview() }
-        
-        let videoView: UIView?
-        
-        if isLocal {
-            videoView = agoraManager.localVideoView
-            print("📹 로컬 비디오 뷰 업데이트")
-        } else {
-            videoView = agoraManager.remoteVideoView
-            print("📹 원격 비디오 뷰 업데이트: \(agoraManager.remoteUserJoined ? "연결됨" : "대기중")")
+
+    // MARK: - Coordinator
+    class Coordinator {
+        let isLocal: Bool
+        private weak var currentVideoView: UIView?
+        private weak var profileView: UIView?
+        private var lastVideoViewIdentifier: ObjectIdentifier?
+        private var lastShowProfile: Bool?
+
+        init(isLocal: Bool) {
+            self.isLocal = isLocal
         }
-        
-        // 카메라가 꺼져있는지 확인
-        let shouldShowProfile = (isLocal && agoraManager.isCameraOff) || 
-                               (!isLocal && agoraManager.remoteUserJoined && !agoraManager.remoteVideoEnabled)
-        
-        if let videoView = videoView, !shouldShowProfile {
-            containerView.addSubview(videoView)
-            videoView.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([
-                videoView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-                videoView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-                videoView.topAnchor.constraint(equalTo: containerView.topAnchor),
-                videoView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
-            ])
-        } else {
-            // 비디오가 없거나 카메라가 꺼진 상태일 때 프로필 화면 표시
-            let profileView = UIView()
-            profileView.backgroundColor = .black
-            profileView.translatesAutoresizingMaskIntoConstraints = false
-            
-            // 프로필 아이콘 추가
+
+        func setupInitialView(_ containerView: UIView) {
+            updateVideoView(containerView)
+        }
+
+        func updateVideoView(_ containerView: UIView) {
+            let agoraManager = AgoraManager.shared
+
+            // 현재 상태 확인
+            let videoView: UIView? = isLocal ? agoraManager.localVideoView : agoraManager.remoteVideoView
+            let shouldShowProfile = (isLocal && agoraManager.isCameraOff) ||
+                                   (!isLocal && agoraManager.remoteUserJoined && !agoraManager.remoteVideoEnabled)
+
+            // 상태가 동일하면 업데이트 스킵
+            let currentViewId = videoView.map { ObjectIdentifier($0) }
+            if currentViewId == lastVideoViewIdentifier && shouldShowProfile == lastShowProfile {
+                return
+            }
+
+            // 상태 저장
+            lastVideoViewIdentifier = currentViewId
+            lastShowProfile = shouldShowProfile
+
+            // 기존 뷰가 동일하면 재사용
+            if let videoView = videoView, !shouldShowProfile {
+                if currentVideoView === videoView {
+                    return // 동일한 비디오 뷰면 스킵
+                }
+
+                // 기존 서브뷰 제거
+                containerView.subviews.forEach { $0.removeFromSuperview() }
+                profileView = nil
+
+                // 비디오 뷰 추가
+                containerView.addSubview(videoView)
+                videoView.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([
+                    videoView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+                    videoView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+                    videoView.topAnchor.constraint(equalTo: containerView.topAnchor),
+                    videoView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
+                ])
+
+                currentVideoView = videoView
+
+            } else {
+                // 프로필 뷰가 이미 있으면 재사용
+                if profileView != nil && shouldShowProfile {
+                    return
+                }
+
+                // 기존 서브뷰 제거
+                containerView.subviews.forEach { $0.removeFromSuperview() }
+                currentVideoView = nil
+
+                // 프로필 뷰 생성
+                let newProfileView = createProfileView(
+                    showWaitingLabel: !isLocal && videoView == nil
+                )
+
+                containerView.addSubview(newProfileView)
+                newProfileView.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([
+                    newProfileView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+                    newProfileView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+                    newProfileView.topAnchor.constraint(equalTo: containerView.topAnchor),
+                    newProfileView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
+                ])
+
+                profileView = newProfileView
+            }
+        }
+
+        private func createProfileView(showWaitingLabel: Bool) -> UIView {
+            let profileContainer = UIView()
+            profileContainer.backgroundColor = .black
+
+            // 프로필 아이콘
             let profileIcon = UIImageView()
-            let personImage = UIImage(systemName: "person.crop.circle.fill")
-            profileIcon.image = personImage
+            profileIcon.image = UIImage(systemName: "person.crop.circle.fill")
             profileIcon.tintColor = UIColor.white.withAlphaComponent(0.5)
             profileIcon.contentMode = .scaleAspectFit
             profileIcon.translatesAutoresizingMaskIntoConstraints = false
-            
-            containerView.addSubview(profileView)
-            profileView.addSubview(profileIcon)
-            
+
+            profileContainer.addSubview(profileIcon)
+
             NSLayoutConstraint.activate([
-                profileView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-                profileView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-                profileView.topAnchor.constraint(equalTo: containerView.topAnchor),
-                profileView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
-                
-                profileIcon.centerXAnchor.constraint(equalTo: profileView.centerXAnchor),
-                profileIcon.centerYAnchor.constraint(equalTo: profileView.centerYAnchor),
-                profileIcon.widthAnchor.constraint(equalTo: profileView.widthAnchor, multiplier: 0.3),
+                profileIcon.centerXAnchor.constraint(equalTo: profileContainer.centerXAnchor),
+                profileIcon.centerYAnchor.constraint(equalTo: profileContainer.centerYAnchor),
+                profileIcon.widthAnchor.constraint(equalTo: profileContainer.widthAnchor, multiplier: 0.3),
                 profileIcon.heightAnchor.constraint(equalTo: profileIcon.widthAnchor)
             ])
-            
-            // 텍스트 레이블 추가 (원격 사용자가 아직 연결되지 않은 경우만)
-            if !isLocal && videoView == nil {
-                let placeholderLabel = UILabel()
-                placeholderLabel.text = "상대방 대기중..."
-                placeholderLabel.textColor = .white
-                placeholderLabel.textAlignment = .center
-                placeholderLabel.font = UIFont.systemFont(ofSize: 14)
-                placeholderLabel.translatesAutoresizingMaskIntoConstraints = false
-                
-                profileView.addSubview(placeholderLabel)
+
+            // 대기 레이블
+            if showWaitingLabel {
+                let label = UILabel()
+                label.text = "상대방 대기중..."
+                label.textColor = .white
+                label.textAlignment = .center
+                label.font = UIFont.systemFont(ofSize: 14)
+                label.translatesAutoresizingMaskIntoConstraints = false
+
+                profileContainer.addSubview(label)
                 NSLayoutConstraint.activate([
-                    placeholderLabel.centerXAnchor.constraint(equalTo: profileView.centerXAnchor),
-                    placeholderLabel.topAnchor.constraint(equalTo: profileIcon.bottomAnchor, constant: 16)
+                    label.centerXAnchor.constraint(equalTo: profileContainer.centerXAnchor),
+                    label.topAnchor.constraint(equalTo: profileIcon.bottomAnchor, constant: 16)
                 ])
             }
+
+            return profileContainer
         }
     }
 }
