@@ -29,15 +29,15 @@ class ContentModerationManager: ObservableObject {
             "status": "pending"
         ]
         
-        // 1. 신고 데이터 저장
+        // 신고 데이터 저장
         db.collection("reports").addDocument(data: reportData) { [weak self] error in
             if let error = error {
-                print("❌ 신고 실패: \(error.localizedDescription)")
+                AppLogger.moderation.error("신고 실패", error: error)
                 completion(false)
                 return
             }
-            
-            print("✅ 신고 접수 완료: \(reason)")
+
+            AppLogger.moderation.notice("신고 접수 완료: \(reason)")
             
             // 2. 신고 횟수 확인 및 자동 제재 검토
             self?.checkAndApplyAutoSanction(reportedUserId: reportedUserId)
@@ -56,12 +56,14 @@ class ContentModerationManager: ObservableObject {
             .getDocuments { [weak self] querySnapshot, error in
                 
                 guard let documents = querySnapshot?.documents else {
-                    print("❌ 신고 기록 조회 실패: \(error?.localizedDescription ?? "")")
+                    if let error = error {
+                        AppLogger.moderation.error("신고 기록 조회 실패", error: error)
+                    }
                     return
                 }
-                
+
                 let reportCount = documents.count
-                print("📊 사용자 \(reportedUserId) 최근 7일 신고 횟수: \(reportCount)")
+                AppLogger.moderation.debug("사용자 \(reportedUserId) 최근 7일 신고 횟수: \(reportCount)")
                 
                 // 임계값 초과 시 자동 제재
                 if reportCount >= self?.reportThreshold ?? 3 {
@@ -85,9 +87,9 @@ class ContentModerationManager: ObservableObject {
         
         db.collection("suspensions").addDocument(data: suspensionData) { error in
             if let error = error {
-                print("❌ 계정 정지 실패: \(error.localizedDescription)")
+                AppLogger.moderation.error("계정 정지 실패", error: error)
             } else {
-                print("⚠️ 계정 정지 적용: \(userId) - \(days)일간, 사유: \(reason)")
+                AppLogger.moderation.warning("계정 정지 적용: \(userId) - \(days)일간, 사유: \(reason)")
                 
                 // 사용자에게 정지 알림 전송
                 self.sendSuspensionNotification(userId: userId, days: days, reason: reason)
@@ -193,7 +195,7 @@ extension UserManager {
         // 1. 신고 접수
         ContentModerationManager.shared.reportUser(reportedUserId: userId, reason: reason) { success in
             if success {
-                print("✅ 신고 및 차단 완료: \(userId)")
+                AppLogger.moderation.notice("신고 및 차단 완료: \(userId)")
             }
         }
         

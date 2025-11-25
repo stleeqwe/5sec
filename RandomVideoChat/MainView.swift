@@ -202,14 +202,10 @@ struct MainView: View {
                 .onEnded { value in
                     // 위로 스와이프 감지
                     if value.translation.height < -50 {
-                        print("⬆️ 스와이프 감지 - 검증 중...")
-                        
                         // 성별 선택 확인
                         if userManager.currentUser?.gender != nil {
-                            print("✅ 모든 조건 충족 - 매칭 화면 표시")
                             showMatchingView = true
                         } else {
-                            print("❌ 성별 선택 필요 - 알림 표시")
                             permissionMessage = "매칭을 시작하려면 먼저 성별을 선택해주세요."
                             showPermissionAlert = true
                         }
@@ -326,19 +322,17 @@ struct MainView: View {
 
     
     func requestPermissions() {
-        // 카메라 권한
         AVCaptureDevice.requestAccess(for: .video) { granted in
-            print("📷 카메라 권한: \(granted)")
+            AppLogger.camera.debug("카메라 권한: \(granted)")
             if granted {
                 checkMicrophonePermission()
             }
         }
     }
-    
+
     func checkMicrophonePermission() {
-        // 마이크 권한
         AVCaptureDevice.requestAccess(for: .audio) { granted in
-            print("🎤 마이크 권한: \(granted)")
+            AppLogger.camera.debug("마이크 권한: \(granted)")
             DispatchQueue.main.async {
                 self.permissionsGranted = granted
             }

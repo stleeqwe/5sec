@@ -63,12 +63,12 @@ final class MemoryLeakDetector {
             }
             
             DispatchQueue.main.async {
-                print("🔍 Memory Tracking: \(totalObjects) objects alive")
-                
+                AppLogger.performance.debug("Memory Tracking: \(totalObjects) objects alive")
+
                 if !leaks.isEmpty {
-                    print("⚠️ Potential Memory Leaks Detected:")
+                    AppLogger.performance.warning("Potential Memory Leaks Detected:")
                     for (className, count) in leaks.sorted(by: { $0.value > $1.value }) {
-                        print("   - \(className): \(count) instances (>2min alive)")
+                        AppLogger.performance.warning("  - \(className): \(count) instances (>2min alive)")
                     }
                 }
             }
@@ -78,8 +78,7 @@ final class MemoryLeakDetector {
     private func cleanupDeallocatedObjects() {
         trackingObjects = trackingObjects.filter { $0.object != nil }
         
-        // 로그로 정리된 객체 수 확인
-        print("🧹 Cleaned up deallocated objects. Remaining: \(trackingObjects.count)")
+        AppLogger.performance.debug("Cleaned up deallocated objects. Remaining: \(trackingObjects.count)")
     }
     
     // 특정 클래스의 인스턴스 개수 확인
@@ -104,12 +103,10 @@ struct MemoryTrackingModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onAppear {
-                // View가 나타날 때 추적 시작
-                print("👁 \(viewName) appeared - starting memory tracking")
+                AppLogger.performance.debug("\(viewName) appeared - starting memory tracking")
             }
             .onDisappear {
-                // View가 사라질 때 정리 확인
-                print("👋 \(viewName) disappeared")
+                AppLogger.performance.debug("\(viewName) disappeared")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                     MemoryLeakDetector.shared.checkForLeaks()
                 }

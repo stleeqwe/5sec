@@ -15,9 +15,16 @@ final class ImageCacheManager {
         memoryCache.countLimit = 100  // 최대 100개 이미지
         memoryCache.totalCostLimit = 100 * 1024 * 1024  // 100MB
         memoryCache.name = "ImageMemoryCache"
-        
-        // 디스크 캐시 설정
-        let cachesDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
+
+        // 디스크 캐시 설정 - 안전한 캐시 디렉토리 획득
+        let cachesDirectory: URL
+        if let directory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            cachesDirectory = directory
+        } else {
+            // Fallback: 임시 디렉토리 사용
+            cachesDirectory = fileManager.temporaryDirectory
+            AppLogger.performance.warning("캐시 디렉토리를 찾을 수 없어 임시 디렉토리 사용")
+        }
         cacheDirectory = cachesDirectory.appendingPathComponent("ImageCache")
         
         diskCache = URLCache(
@@ -46,7 +53,7 @@ final class ImageCacheManager {
     }
     
     @objc private func clearMemoryCache() {
-        print("🧹 Memory warning received - clearing image cache")
+        AppLogger.performance.warning("Memory warning received - clearing image cache")
         memoryCache.removeAllObjects()
     }
     
@@ -141,7 +148,7 @@ final class ImageCacheManager {
             ], ofItemAtPath: fileURL.path)
             
         } catch {
-            print("❌ Failed to save image to disk: \(error)")
+            AppLogger.performance.error("Failed to save image to disk", error: error)
         }
     }
     
@@ -208,10 +215,10 @@ final class ImageCacheManager {
                 }
             }
             
-            print("🧹 Cache cleanup completed: \(cleanedCount) files removed, \(totalSize / 1024 / 1024)MB remaining")
-            
+            AppLogger.performance.debug("Cache cleanup completed: \(cleanedCount) files removed, \(totalSize / 1024 / 1024)MB remaining")
+
         } catch {
-            print("❌ 캐시 정리 실패: \(error)")
+            AppLogger.performance.error("캐시 정리 실패", error: error)
         }
     }
 }

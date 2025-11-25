@@ -27,7 +27,7 @@ class MatchingManager: ObservableObject {
     deinit {
         cleanupAllObservers()
         NotificationCenter.default.removeObserver(self)
-        print("🧹 MatchingManager 메모리 정리 완료")
+        AppLogger.matching.debug("MatchingManager 메모리 정리 완료")
     }
     
     // MARK: - Presence Tracking
@@ -44,7 +44,7 @@ class MatchingManager: ObservableObject {
     }
     
     @objc private func appWillTerminate() {
-        print("🚨 앱 종료 감지 - 통화 종료 신호 전송")
+        AppLogger.matching.warning("앱 종료 감지 - 통화 종료 신호 전송")
         signalCallEnd()
         cleanupOnDisconnect()
     }
@@ -71,11 +71,11 @@ class MatchingManager: ObservableObject {
     }
     
     func startMatching() {
-        print("📱 MatchingManager: startMatching called")
-        
+        AppLogger.matching.info("startMatching 호출됨")
+
         // 중복 호출 방지
         guard !isMatching else {
-            print("⚠️ 이미 매칭 중 - 중복 호출 무시")
+            AppLogger.matching.warning("이미 매칭 중 - 중복 호출 무시")
             return
         }
         
@@ -92,7 +92,7 @@ class MatchingManager: ObservableObject {
         
         // 사용자 정보가 없으면 로딩 시도
         if UserManager.shared.currentUser == nil {
-            print("⚠️ 사용자 정보 로딩 중 - 곧 재시도")
+            AppLogger.matching.warning("사용자 정보 로딩 중 - 곧 재시도")
             UserManager.shared.loadCurrentUserIfNeeded()
         }
 
@@ -124,11 +124,11 @@ class MatchingManager: ObservableObject {
         // 기존 데이터가 있어도 덮어쓰기만 함 (노드 삭제 없음)
         userRef.updateChildValues(userData) { error, _ in
             if let error = error {
-                print("매칭 큐 업데이트 실패: \(error)")
+                AppLogger.matching.error("매칭 큐 업데이트 실패", error: error)
                 self.isMatching = false
                 return
             }
-            print("매칭 큐에 업데이트됨 (삭제 없이 덮어쓰기)")
+            AppLogger.matching.info("매칭 큐에 업데이트됨 (삭제 없이 덮어쓰기)")
             
             // onDisconnect 설정 - 연결이 끊어지면 자동으로 큐에서 제거
             userRef.onDisconnectRemoveValue()
@@ -159,10 +159,7 @@ class MatchingManager: ObservableObject {
     
     // MatchingManager.swift의 handleMatchSuccess 함수 내부
     func handleMatchSuccess(matchId: String, channelName: String, matchedUserId: String) {
-        print("✅ 매칭 성공 처리")
-        print("   - 매칭 ID: \(matchId)")
-        print("   - 채널명: \(channelName)")
-        print("   - 상대방 ID: \(matchedUserId)")
+        AppLogger.matching.notice("매칭 성공 처리 - matchId: \(matchId), channel: \(channelName), opponent: \(matchedUserId)")
         
         // UserDefaults에 저장 (중요!)
         UserDefaults.standard.set(channelName, forKey: "currentChannelName")
@@ -170,7 +167,7 @@ class MatchingManager: ObservableObject {
         
         // 세션 기록에 추가 (반복 매칭 방지)
         UserManager.shared.addRecentMatch(matchedUserId)
-        print("📝 세션 매칭 기록에 추가: \(matchedUserId)")
+        AppLogger.matching.debug("세션 매칭 기록에 추가: \(matchedUserId)")
         
         self.matchedUserId = matchedUserId
         self.isMatched = true
@@ -178,8 +175,8 @@ class MatchingManager: ObservableObject {
     
     func cancelMatching() {
         let currentUserId = Auth.auth().currentUser?.uid ?? "testUser_\(UUID().uuidString.prefix(8))"
-        
-        print("🛑 매칭 취소")
+
+        AppLogger.matching.info("매칭 취소")
         
         isMatching = false
         isMatched = false
@@ -225,7 +222,7 @@ class MatchingManager: ObservableObject {
                   let data = snapshot.value as? [String: Any],
                   let status = data["status"] as? String else { return }
             
-            print("📊 내 상태: \(status)")
+            AppLogger.matching.debug("내 상태: \(status)")
             
             // 이미 매칭된 상태면 무시
             if self.isMatched {
@@ -238,8 +235,7 @@ class MatchingManager: ObservableObject {
                matchId != "null",
                channelName != "null" {
                 
-                print("🎯 매칭 완료 감지!")
-                print("📺 채널: \(channelName)")
+                AppLogger.matching.notice("매칭 완료 감지! 채널: \(channelName)")
                 
                 // 상대방 ID 찾기
                 self.findMatchedUser(matchId: matchId, currentUserId: userId)
@@ -267,7 +263,7 @@ class MatchingManager: ObservableObject {
                let user2 = data["user2"] as? String {
                 
                 self?.matchedUserId = (user1 == currentUserId) ? user2 : user1
-                print("📺 매칭된 상대: \(self?.matchedUserId ?? "")")
+                AppLogger.matching.debug("매칭된 상대: \(self?.matchedUserId ?? "")")
             }
         }
     }
@@ -287,7 +283,7 @@ class MatchingManager: ObservableObject {
         let myGender = UserManager.shared.currentUser?.gender?.rawValue ?? "any"
         let myPref = UserManager.shared.currentUser?.preferredGender?.rawValue ?? "any"
         
-        print("🔄 매칭 시도 - 내 성별: \(myGender), 선호: \(myPref), currentUser: \(UserManager.shared.currentUser != nil ? "로드됨" : "nil")")
+        AppLogger.matching.debug("매칭 시도 - 내 성별: \(myGender), 선호: \(myPref), currentUser: \(UserManager.shared.currentUser != nil ? "로드됨" : "nil")")
         
         let buckets = candidateBuckets(for: myPref)
         let matchingRef = database.reference().child("matching_queue")
@@ -297,102 +293,75 @@ class MatchingManager: ObservableObject {
         func tryBucket(_ index: Int) {
             // 매칭 상태 확인 - 취소된 경우 재시도 중단
             guard self.isMatching && !self.isMatched else {
-                print("🚫 매칭 취소됨 - 재시도 중단")
+                AppLogger.matching.debug("매칭 취소됨 - 재시도 중단")
                 return
             }
             
             guard index < buckets.count else {
-                print("⚠️ 후보 없음. 잠시 후 재시도.")
+                AppLogger.matching.debug("후보 없음. 잠시 후 재시도.")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                     // 재시도 전에도 매칭 상태 재확인
                     guard self.isMatching && !self.isMatched else {
-                        print("🚫 재시도 취소됨 - 매칭 상태 변경")
+                        AppLogger.matching.debug("재시도 취소됨 - 매칭 상태 변경")
                         return
                     }
                     self.findWaitingUsers(currentUserId: currentUserId)
                 }
                 return
             }
-            
+
             let bucket = buckets[index]
-            
-            print("🔍 버킷 검색 시작: \(bucket) (내 성별: \(myGender), 내 선호: \(myPref))")
+
+            AppLogger.matching.debug("버킷 검색 시작: \(bucket) (내 성별: \(myGender), 내 선호: \(myPref))")
             
             // 올바른 버킷 쿼리 (Firebase 인덱스가 있으면 최적화됨)
             matchingRef.queryOrdered(byChild: "bucket")
                 .queryEqual(toValue: bucket)
                 .observeSingleEvent(of: .value) { snapshot in
-                    print("📦 버킷 '\(bucket)' 응답: \(snapshot.childrenCount)개 항목")
+                    AppLogger.matching.debug("버킷 '\(bucket)' 응답: \(snapshot.childrenCount)개 항목")
                     var candidates: [[String: Any]] = []
-                    
+
                     for child in snapshot.children {
                         guard let snap = child as? DataSnapshot,
-                              var dict = snap.value as? [String: Any] else { 
-                            print("❌ 스냅샷 파싱 실패")
-                            continue 
+                              var dict = snap.value as? [String: Any] else {
+                            AppLogger.matching.debug("스냅샷 파싱 실패")
+                            continue
                         }
-                        
+
                         let status = dict["status"] as? String ?? "waiting"
                         let userId = dict["userId"] as? String ?? snap.key
-                        let userBucket = dict["bucket"] as? String ?? "none"
-                        
-                        print("👤 후보 분석: \(userId)")
-                        print("   - 상태: \(status)")
-                        print("   - 버킷: \(userBucket)")
-                        
+
                         // 스테일 데이터 정리: 존재하지 않는 노드 감지
                         if !snap.exists() {
-                            print("   🧹 스테일 데이터 감지 - 정리 중...")
+                            AppLogger.matching.debug("스테일 데이터 감지 - 정리 중: \(userId)")
                             snap.ref.removeValue()
                             continue
                         }
-                        
-                        if status != "waiting" {
-                            print("   ❌ 대기 상태 아님")
-                            continue
-                        }
-                        if userId == currentUserId {
-                            print("   ❌ 자기 자신")
-                            continue
-                        }
-                        
-                        // 2) 양방향 선호 필터링
+
+                        if status != "waiting" { continue }
+                        if userId == currentUserId { continue }
+
+                        // 양방향 선호 필터링
                         let candidatePref = (dict["preferredGender"] as? String) ?? "any"
                         let candidateGender = (dict["gender"] as? String) ?? "any"
-                        
-                        print("   - 후보 성별: \(candidateGender), 후보 선호: \(candidatePref)")
-                        
+
                         let myPrefOK = (myPref == "any" || candidateGender == myPref)
                         let hisPrefOK = (candidatePref == "any" || myGender == candidatePref)
-                        
-                        print("   - 내 선호 충족: \(myPrefOK), 상대 선호 충족: \(hisPrefOK)")
-                        
-                        if !myPrefOK || !hisPrefOK { 
-                            print("   ❌ 성별 선호 불일치")
-                            continue 
-                        }
-                        
+
+                        if !myPrefOK || !hisPrefOK { continue }
+
                         // 차단/최근매칭 제외
                         let canMatch = UserManager.shared.canMatchWith(userId)
-                        print("   - canMatchWith 결과: \(canMatch)")
-                        if !canMatch { 
-                            print("   ❌ 차단/최근매칭")
-                            continue 
-                        }
-                        
-                        print("   ✅ 후보로 선정 - candidates에 추가 중...")
+                        if !canMatch { continue }
+
                         dict["userId"] = userId
                         candidates.append(dict)
-                        print("   ✅ candidates 추가 완료, 현재 개수: \(candidates.count)")
                     }
-                    
-                    print("🎯 후보 집계 완료: \(candidates.count)개")
+
+                    AppLogger.matching.debug("후보 집계 완료: \(candidates.count)개")
                     if candidates.isEmpty {
-                        print("❌ 후보 배열이 비어있음 - 다음 버킷 시도")
                         tryBucket(index + 1)
                         return
-                    } else {
-                        print("✅ 후보 \(candidates.count)개로 매칭 시도")
                     }
                     
                     // 3) 의사 랜덤: pivot에 가장 가까운 randomSeed 선택(원형 거리)
@@ -423,36 +392,30 @@ class MatchingManager: ObservableObject {
                                     candidateList: [[String: Any]],
                                     index: Int,
                                     onExhausted: @escaping () -> Void) {
-        
-        print("🔒 tryLockAndFinalize 호출됨")
-        print("   - candidateList.count: \(candidateList.count)")
-        print("   - index: \(index)")
-        
+
+        AppLogger.matching.debug("tryLockAndFinalize - candidates: \(candidateList.count), index: \(index)")
+
         guard index < candidateList.count else {
-            print("❌ 인덱스 범위 벗어남 - onExhausted 호출")
+            AppLogger.matching.debug("인덱스 범위 벗어남 - onExhausted 호출")
             onExhausted(); return
         }
-        
+
         let candidate = candidateList[index]
         let opponentId = candidate["userId"] as? String ?? ""
-        
-        print("🎯 매칭 시도 대상: \(opponentId)")
-        
+
         // 매칭 ID와 채널명 미리 생성
         let matchId = UUID().uuidString
         let timestamp = Int(Date().timeIntervalSince1970)
         let channelName = "ch_\(timestamp)_\(Int.random(in: 1000...9999))"
-        
-        print("🆔 매칭 ID 생성: \(matchId)")
-        print("📺 채널명 생성: \(channelName)")
-        
+
+        AppLogger.matching.debug("매칭 시도 - opponent: \(opponentId), matchId: \(matchId), channel: \(channelName)")
+
         let candidateRef = database.reference().child("matching_queue").child(opponentId)
-        
-        print("🔍 트랜잭션 전 상대방 데이터 존재 확인...")
+
         // 트랜잭션 전에 상대방 데이터 존재 여부 먼저 확인
         candidateRef.observeSingleEvent(of: .value) { snapshot in
             guard snapshot.exists() else {
-                print("🚫 상대방 노드 없음 - 큐에서 사라짐. 다음 후보로 넘어갑니다.")
+                AppLogger.matching.debug("상대방 노드 없음 - 다음 후보로")
                 self.tryLockAndFinalize(currentUserId: currentUserId,
                                         myGender: myGender,
                                         candidateList: candidateList,
@@ -460,9 +423,9 @@ class MatchingManager: ObservableObject {
                                         onExhausted: onExhausted)
                 return
             }
-            
-            guard var dict = snapshot.value as? [String: Any] else {
-                print("🚫 상대방 데이터 형식 오류. 다음 후보로 넘어갑니다.")
+
+            guard let dict = snapshot.value as? [String: Any] else {
+                AppLogger.matching.debug("상대방 데이터 형식 오류 - 다음 후보로")
                 self.tryLockAndFinalize(currentUserId: currentUserId,
                                         myGender: myGender,
                                         candidateList: candidateList,
@@ -470,11 +433,10 @@ class MatchingManager: ObservableObject {
                                         onExhausted: onExhausted)
                 return
             }
-            
+
             let status = dict["status"] as? String ?? "waiting"
-            print("🔍 상대방 현재 상태 확인: \(status)")
             if status != "waiting" {
-                print("🚫 상대방이 이미 대기 상태가 아님(\(status)). 다음 후보로 넘어갑니다.")
+                AppLogger.matching.debug("상대방 이미 대기 상태 아님(\(status)) - 다음 후보로")
                 self.tryLockAndFinalize(currentUserId: currentUserId,
                                         myGender: myGender,
                                         candidateList: candidateList,
@@ -482,16 +444,12 @@ class MatchingManager: ObservableObject {
                                         onExhausted: onExhausted)
                 return
             }
-            
-            print("✅ 상대방 데이터 유효성 확인 완료 - 타임스탬프 기반 매칭 시작")
-            
+
             // 트랜잭션 대신 타임스탬프 기반 경쟁 시스템 사용
             let myTimestamp = Int(Date().timeIntervalSince1970 * 1000) // 밀리초 단위
             let lockKey = "matchingLock_\(min(currentUserId, opponentId))_\(max(currentUserId, opponentId))"
-            
-            print("🏁 타임스탬프 기반 락 시도: \(myTimestamp)")
-            
-            // 1) 내 타임스탬프로 락 시도
+
+            // 내 타임스탬프로 락 시도
             let lockRef = self.database.reference().child("matching_locks").child(lockKey)
             let lockData: [String: Any] = [
                 "timestamp": myTimestamp,
@@ -500,10 +458,10 @@ class MatchingManager: ObservableObject {
                 "matchId": matchId,
                 "status": "locking"
             ]
-            
+
             lockRef.setValue(lockData) { error, _ in
                 if let error = error {
-                    print("❌ 락 설정 실패: \(error)")
+                    AppLogger.matching.error("락 설정 실패", error: error)
                     self.tryLockAndFinalize(currentUserId: currentUserId,
                                             myGender: myGender,
                                             candidateList: candidateList,
@@ -511,14 +469,14 @@ class MatchingManager: ObservableObject {
                                             onExhausted: onExhausted)
                     return
                 }
-                
-                // 2) 0.2초 후 락 상태 확인 (다른 클라이언트의 경쟁 대기)
+
+                // 0.2초 후 락 상태 확인 (다른 클라이언트의 경쟁 대기)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     lockRef.observeSingleEvent(of: .value) { lockSnapshot in
                         guard let lockResult = lockSnapshot.value as? [String: Any],
                               let winnerTimestamp = lockResult["timestamp"] as? Int,
                               let winner = lockResult["initiator"] as? String else {
-                            print("❌ 락 결과 읽기 실패")
+                            AppLogger.matching.debug("락 결과 읽기 실패")
                             self.tryLockAndFinalize(currentUserId: currentUserId,
                                                     myGender: myGender,
                                                     candidateList: candidateList,
@@ -526,16 +484,16 @@ class MatchingManager: ObservableObject {
                                                     onExhausted: onExhausted)
                             return
                         }
-                        
+
                         if winner == currentUserId && winnerTimestamp == myTimestamp {
-                            print("✅ 락 획득 성공 - 매칭 진행")
+                            AppLogger.matching.notice("락 획득 성공 - 매칭 진행")
                             self.proceedWithMatching(currentUserId: currentUserId,
                                                      opponentId: opponentId,
                                                      matchId: matchId,
                                                      channelName: channelName,
                                                      lockRef: lockRef)
                         } else {
-                            print("❌ 락 획득 실패 - 다른 클라이언트가 우선 (winner: \(winner), timestamp: \(winnerTimestamp) vs \(myTimestamp))")
+                            AppLogger.matching.debug("락 획득 실패 - 다른 클라이언트 우선")
                             self.tryLockAndFinalize(currentUserId: currentUserId,
                                                     myGender: myGender,
                                                     candidateList: candidateList,
@@ -554,10 +512,10 @@ class MatchingManager: ObservableObject {
                                      matchId: String,
                                      channelName: String,
                                      lockRef: DatabaseReference) {
-        
-        print("🚀 매칭 확정 진행 시작")
-        
-        // 1) 매칭 확정(멀티 로케이션 업데이트)
+
+        AppLogger.matching.info("매칭 확정 진행 시작")
+
+        // 매칭 확정(멀티 로케이션 업데이트)
         let updates: [String: Any] = [
             "matches/\(matchId)/status": "active",
             "matches/\(matchId)/user1": currentUserId,
@@ -571,13 +529,13 @@ class MatchingManager: ObservableObject {
             "matching_queue/\(opponentId)/matchId": matchId,
             "matching_queue/\(opponentId)/channelName": channelName
         ]
-        
+
         database.reference().updateChildValues(updates) { error, _ in
             // 락 정리
             lockRef.removeValue()
-            
+
             if let error = error {
-                print("❌ 매칭 확정 실패: \(error)")
+                AppLogger.matching.error("매칭 확정 실패", error: error)
                 // 롤백 - 큐 상태를 waiting으로 되돌림
                 let rollbackUpdates: [String: Any] = [
                     "matching_queue/\(currentUserId)/status": "waiting",
@@ -589,7 +547,7 @@ class MatchingManager: ObservableObject {
                 ]
                 self.database.reference().updateChildValues(rollbackUpdates)
             } else {
-                print("✅ 매칭 확정 완료: \(matchId)")
+                AppLogger.matching.notice("매칭 확정 완료: \(matchId)")
                 // 기존에 구현된 handleMatchSuccess(...) 호출
                 self.handleMatchSuccess(matchId: matchId,
                                         channelName: channelName,
@@ -609,9 +567,11 @@ class MatchingManager: ObservableObject {
     private func removeFromQueue(userId: String) {
         let userRef = database.reference().child("matching_queue").child(userId)
         userRef.removeValue { error, _ in
-            if error == nil {
-                print("🗑 큐에서 제거 완료: \(userId)")
+            if let error = error {
+                AppLogger.matching.error("큐에서 제거 실패: \(userId)", error: error)
+                return
             }
+            AppLogger.matching.debug("큐에서 제거 완료: \(userId)")
         }
     }
     
@@ -624,76 +584,76 @@ class MatchingManager: ObservableObject {
     
     // MARK: - 타이머 동기화
     func updateCallTimer(_ seconds: Int) {
-            guard let matchId = UserDefaults.standard.string(forKey: "currentMatchId") else {
-                print("❌ matchId가 없어서 타이머를 업데이트할 수 없음")
-                return
-            }
-            
-            // Firebase에 타이머 업데이트
-            database.reference()
-                .child("matches")
-                .child(matchId)
-                .child("timeRemaining")
-                .setValue(seconds) { error, _ in
-                    if let error = error {
-                        print("❌ 타이머 업데이트 실패: \(error)")
-                    } else {
-                        print("⏱ 타이머 업데이트 성공: \(seconds)초")
-                    }
-                }
+        guard let matchId = UserDefaults.standard.string(forKey: "currentMatchId") else {
+            AppLogger.matching.warning("matchId가 없어서 타이머를 업데이트할 수 없음")
+            return
         }
 
-    func observeCallTimer(completion: @escaping (Int) -> Void) {
-            guard let matchId = UserDefaults.standard.string(forKey: "currentMatchId") else {
-                print("❌ matchId가 없어서 타이머를 관찰할 수 없음")
-                return
-            }
-            
-            // 기존 옵저버 제거
-            if let handle = timerHandle {
-                database.reference().removeObserver(withHandle: handle)
-            }
-            
-            timerHandle = database.reference()
-                .child("matches")
-                .child(matchId)
-                .child("timeRemaining")
-                .observe(.value) { snapshot in
-                    if let time = snapshot.value as? Int {
-                        print("⏱ 타이머 동기화 수신: \(time)초")
-                        completion(time)
-                    }
+        // Firebase에 타이머 업데이트
+        database.reference()
+            .child("matches")
+            .child(matchId)
+            .child("timeRemaining")
+            .setValue(seconds) { error, _ in
+                if let error = error {
+                    AppLogger.matching.error("타이머 업데이트 실패", error: error)
+                } else {
+                    AppLogger.matching.debug("타이머 업데이트 성공: \(seconds)초")
                 }
-            
-            print("👀 타이머 옵저버 설정 완료 - matchId: \(matchId)")
+            }
+    }
+
+    func observeCallTimer(completion: @escaping (Int) -> Void) {
+        guard let matchId = UserDefaults.standard.string(forKey: "currentMatchId") else {
+            AppLogger.matching.warning("matchId가 없어서 타이머를 관찰할 수 없음")
+            return
         }
+
+        // 기존 옵저버 제거
+        if let handle = timerHandle {
+            database.reference().removeObserver(withHandle: handle)
+        }
+
+        timerHandle = database.reference()
+            .child("matches")
+            .child(matchId)
+            .child("timeRemaining")
+            .observe(.value) { snapshot in
+                if let time = snapshot.value as? Int {
+                    AppLogger.matching.debug("타이머 동기화 수신: \(time)초")
+                    completion(time)
+                }
+            }
+
+        AppLogger.matching.debug("타이머 옵저버 설정 완료 - matchId: \(matchId)")
+    }
     
     func signalCallEnd() {
         // UserDefaults에서 matchId를 가져와서 오버로드된 함수 호출
         guard let matchId = UserDefaults.standard.string(forKey: "currentMatchId") else {
-            print("❌ signalCallEnd: matchId가 없음 - UserDefaults에서 조회 실패")
+            AppLogger.matching.warning("signalCallEnd: matchId가 없음")
             return
         }
         signalCallEnd(matchId: matchId)
     }
-    
+
     func signalCallEnd(matchId: String) {
         // 현재 사용자 ID 가져오기
         let currentUserId = Auth.auth().currentUser?.uid ?? ""
-        print("📡 통화 종료 신호 전송 - matchId: \(matchId), userId: \(currentUserId)")
-        
+        AppLogger.matching.info("통화 종료 신호 전송 - matchId: \(matchId), userId: \(currentUserId)")
+
         // Firebase에 통화 종료 신호 - 사용자별로 따로 저장
         let updates: [String: Any] = [
             "matches/\(matchId)/endedBy/\(currentUserId)": true,
             "matches/\(matchId)/endedAt": ServerValue.timestamp(),
             "matches/\(matchId)/status": "ended"
         ]
-        
+
         database.reference().updateChildValues(updates) { error, _ in
             if let error = error {
-                print("❌ 통화 종료 신호 전송 실패: \(error)")
+                AppLogger.matching.error("통화 종료 신호 전송 실패", error: error)
             } else {
-                print("✅ 통화 종료 신호 전송 성공")
+                AppLogger.matching.notice("통화 종료 신호 전송 성공")
             }
         }
     }
@@ -707,9 +667,9 @@ class MatchingManager: ObservableObject {
         presenceHandle = presenceRef.observe(.value) { [weak self] snapshot in
             guard let data = snapshot.value as? [String: Any],
                   let isOnline = data["online"] as? Bool else { return }
-            
+
             if !isOnline {
-                print("🚨 상대방 연결 끊김 감지 - 6초 지연 후 처리")
+                AppLogger.matching.warning("상대방 연결 끊김 감지 - 6초 지연 후 처리")
                 // 6초 지연을 두어 상대방이 백그라운드에서 복귀할 시간을 줌
                 DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
                     // 6초 후에도 여전히 offline이면 통화 종료
@@ -717,11 +677,11 @@ class MatchingManager: ObservableObject {
                         if let delayedData = delayedSnapshot.value as? [String: Any],
                            let delayedIsOnline = delayedData["online"] as? Bool,
                            !delayedIsOnline {
-                            print("🚨 6초 후에도 상대방 연결 끊김 확인 - 통화 종료")
+                            AppLogger.matching.warning("6초 후에도 상대방 연결 끊김 확인 - 통화 종료")
                             self?.callEndedByOpponent = true
                             onDisconnect()
                         } else {
-                            print("✅ 상대방이 다시 연결됨 - 통화 유지")
+                            AppLogger.matching.info("상대방이 다시 연결됨 - 통화 유지")
                         }
                     }
                 }
@@ -739,19 +699,19 @@ class MatchingManager: ObservableObject {
     // MARK: - 통화 종료 관찰
     func observeCallEnd(completion: @escaping () -> Void) {
         guard let matchId = UserDefaults.standard.string(forKey: "currentMatchId") else {
-            print("❌ observeCallEnd: matchId가 없어서 통화 종료를 관찰할 수 없음")
+            AppLogger.matching.warning("observeCallEnd: matchId가 없음")
             return
         }
-        
+
         let currentUserId = Auth.auth().currentUser?.uid ?? ""
-        print("👀 통화 종료 관찰 시작 - matchId: \(matchId), currentUserId: \(currentUserId)")
-        
+        AppLogger.matching.debug("통화 종료 관찰 시작 - matchId: \(matchId)")
+
         // 기존 옵저버 제거
         if let handle = callEndHandle {
             database.reference().removeObserver(withHandle: handle)
             callEndHandle = nil
         }
-        
+
         // 상대방의 종료 신호 관찰 - endedBy 노드 변화 감지
         callEndHandle = database.reference()
             .child("matches")
@@ -759,48 +719,44 @@ class MatchingManager: ObservableObject {
             .child("endedBy")
             .observe(.childAdded) { [weak self] snapshot in
                 let endedByUserId = snapshot.key
-                print("🔔 통화 종료 신호 감지 - endedBy: \(endedByUserId), currentUser: \(currentUserId)")
-                
+
                 // 자신이 아닌 다른 사용자가 종료한 경우
                 if endedByUserId != currentUserId {
-                    print("✅ 상대방 종료 확인 - 통화 종료 처리")
+                    AppLogger.matching.notice("상대방 종료 확인 - 통화 종료 처리")
                     completion()
-                    
+
                     // 한 번 실행 후 옵저버 제거
                     if let handle = self?.callEndHandle {
                         self?.database.reference().removeObserver(withHandle: handle)
                         self?.callEndHandle = nil
-                        print("🧹 통화 종료 옵저버 제거 완료")
                     }
-                } else {
-                    print("ℹ️ 내가 종료한 신호이므로 무시")
                 }
             }
-        
-        print("✅ 통화 종료 옵저버 설정 완료 - matchId: \(matchId)")
+
+        AppLogger.matching.debug("통화 종료 옵저버 설정 완료 - matchId: \(matchId)")
     }
     
     func observeCallStatusEnded(completion: @escaping () -> Void) {
         guard let matchId = UserDefaults.standard.string(forKey: "currentMatchId") else {
-            print("❌ observeCallStatusEnded: matchId가 없어서 상태 변경을 관찰할 수 없음")
+            AppLogger.matching.warning("observeCallStatusEnded: matchId가 없음")
             return
         }
-        
+
         // 기존 핸들 제거
         if let handle = statusEndedHandle {
             database.reference().removeObserver(withHandle: handle)
             statusEndedHandle = nil
         }
-        
+
         statusEndedHandle = database.reference()
             .child("matches")
             .child(matchId)
             .child("status")
             .observe(.value) { [weak self] snapshot in
                 if let status = snapshot.value as? String, status == "ended" {
-                    print("🔔 통화 상태 'ended' 감지")
+                    AppLogger.matching.notice("통화 상태 'ended' 감지")
                     completion()
-                    
+
                     // 한 번 실행 후 옵저버 제거
                     if let handle = self?.statusEndedHandle {
                         self?.database.reference().removeObserver(withHandle: handle)
@@ -808,7 +764,7 @@ class MatchingManager: ObservableObject {
                     }
                 }
             }
-        print("👀 통화 상태 종료 옵저버 설정 완료 - matchId: \(matchId)")
+        AppLogger.matching.debug("통화 상태 종료 옵저버 설정 완료 - matchId: \(matchId)")
     }
     
     // MARK: - Observer Cleanup
@@ -817,8 +773,8 @@ class MatchingManager: ObservableObject {
         cleanupTimerObserver()
         cleanupPresenceObserver()
         cleanupStatusEndedObserver()
-        
-        print("🧹 통화 관련 옵저버 정리 완료")
+
+        AppLogger.matching.debug("통화 관련 옵저버 정리 완료")
     }
     
     private func cleanupStatusEndedObserver() {
@@ -857,7 +813,7 @@ class MatchingManager: ObservableObject {
         
         // 통화 관련 옵저버 정리
         cleanupCallObservers()
-        
-        print("🧹 MatchingManager 모든 옵저버 정리 완료")
+
+        AppLogger.matching.debug("MatchingManager 모든 옵저버 정리 완료")
     }
 }

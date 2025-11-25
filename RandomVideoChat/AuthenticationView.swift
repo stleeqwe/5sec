@@ -199,7 +199,6 @@ struct AuthenticationView: View {
                 
                 // 익명 로그인 버튼
                 Button(action: {
-                    print("익명 로그인 시도")
                     signInAnonymously()
                 }) {
                     HStack(spacing: 12) {
@@ -273,22 +272,20 @@ struct AuthenticationView: View {
     // 익명 로그인 함수
     func signInAnonymously() {
         isLoading = true
-        
+
         Auth.auth().signInAnonymously { authResult, error in
             if let error = error {
-                print("❌ 익명 로그인 실패: \(error)")
+                AppLogger.auth.error("익명 로그인 실패", error: error)
                 self.isLoading = false
                 return
             }
-            
-            print("✅ 익명 로그인 성공!")
-            print("User ID: \(authResult?.user.uid ?? "")")
-            
-            // 사용자 정보 저장 - loadCurrentUser 사용
+
+            AppLogger.auth.notice("익명 로그인 성공 - uid: \(authResult?.user.uid ?? "")")
+
             if let user = authResult?.user {
                 UserManager.shared.loadCurrentUser(uid: user.uid)
             }
-            
+
             self.isAuthenticated = true
             self.isLoading = false
         }

@@ -1,5 +1,6 @@
 import Foundation
 import FirebaseFunctions
+import FirebaseDatabase
 
 /// Agora 토큰 관리 서비스
 /// Firebase Cloud Functions를 통해 안전하게 토큰을 생성하고 갱신합니다.
@@ -24,23 +25,19 @@ class AgoraTokenService {
     // MARK: - Public Methods
 
     /// 새 토큰 생성 요청
-    /// - Parameters:
-    ///   - channelName: 참가할 채널 이름
-    ///   - uid: 사용자 ID (0이면 Agora가 자동 할당)
-    ///   - completion: 토큰 또는 에러 반환
     func generateToken(
         channelName: String,
         uid: UInt = 0,
         completion: @escaping (Result<TokenResponse, TokenError>) -> Void
     ) {
-        print("🔑 토큰 생성 요청 - 채널: \(channelName)")
+        AppLogger.token.info("토큰 생성 요청 - 채널: \(channelName)")
 
         // 캐시된 토큰이 유효하면 재사용
         if let cached = cachedToken,
            cachedChannelName == channelName,
            let expireTime = tokenExpireTime,
            expireTime.timeIntervalSinceNow > refreshBuffer {
-            print("✅ 캐시된 토큰 사용")
+            AppLogger.token.debug("캐시된 토큰 사용")
             completion(.success(TokenResponse(token: cached, expireTimestamp: Int(expireTime.timeIntervalSince1970))))
             return
         }
@@ -49,12 +46,12 @@ class AgoraTokenService {
             "channelName": channelName,
             "uid": uid,
             "role": "publisher",
-            "expireTime": 3600 // 1시간
+            "expireTime": 3600
         ]
 
         functions.httpsCallable("generateAgoraToken").call(data) { [weak self] result, error in
             if let error = error as NSError? {
-                print("❌ 토큰 생성 실패: \(error.localizedDescription)")
+                AppLogger.token.error("토큰 생성 실패", error: error)
 
                 let tokenError: TokenError
                 switch error.domain {
@@ -79,12 +76,12 @@ class AgoraTokenService {
             guard let data = result?.data as? [String: Any],
                   let token = data["token"] as? String,
                   let expireTimestamp = data["expireTimestamp"] as? Int else {
-                print("❌ 토큰 응답 파싱 실패")
+                AppLogger.token.error("토큰 응답 파싱 실패")
                 completion(.failure(.parseError))
                 return
             }
 
-            print("✅ 토큰 생성 성공 - 만료: \(Date(timeIntervalSince1970: TimeInterval(expireTimestamp)))")
+            AppLogger.token.notice("토큰 생성 성공")
 
             // 캐싱
             self?.cachedToken = token
@@ -104,7 +101,7 @@ class AgoraTokenService {
         uid: UInt = 0,
         completion: @escaping (Result<TokenResponse, TokenError>) -> Void
     ) {
-        print("🔄 토큰 갱신 요청 - 채널: \(channelName)")
+        AppLogger.token.info("토큰 갱신 요청 - 채널: \(channelName)")
 
         let data: [String: Any] = [
             "channelName": channelName,
@@ -113,7 +110,7 @@ class AgoraTokenService {
 
         functions.httpsCallable("refreshAgoraToken").call(data) { [weak self] result, error in
             if let error = error {
-                print("❌ 토큰 갱신 실패: \(error.localizedDescription)")
+                AppLogger.token.error("토큰 갱신 실패", error: error)
                 completion(.failure(.networkError(error.localizedDescription)))
                 return
             }
@@ -125,7 +122,7 @@ class AgoraTokenService {
                 return
             }
 
-            print("✅ 토큰 갱신 성공")
+            AppLogger.token.notice("토큰 갱신 성공")
 
             // 캐시 업데이트
             self?.cachedToken = token
@@ -135,20 +132,19 @@ class AgoraTokenService {
         }
     }
 
-    /// 매칭 데이터에서 토큰 가져오기 (자동 생성된 토큰)
+    /// 매칭 데이터에서 토큰 가져오기
     func getTokenFromMatch(matchId: String, completion: @escaping (String?) -> Void) {
-        // Realtime Database에서 매칭 데이터의 토큰 조회
         let ref = Database.database().reference().child("matches").child(matchId)
 
         ref.observeSingleEvent(of: .value) { snapshot in
             guard let data = snapshot.value as? [String: Any],
                   let token = data["agoraToken"] as? String else {
-                print("⚠️ 매칭 데이터에 토큰 없음 - 새로 생성 필요")
+                AppLogger.token.warning("매칭 데이터에 토큰 없음 - 새로 생성 필요")
                 completion(nil)
                 return
             }
 
-            print("✅ 매칭 데이터에서 토큰 획득")
+            AppLogger.token.debug("매칭 데이터에서 토큰 획득")
             completion(token)
         }
     }
@@ -160,7 +156,7 @@ class AgoraTokenService {
         tokenExpireTime = nil
         refreshTimer?.invalidate()
         refreshTimer = nil
-        print("🧹 토큰 캐시 초기화")
+        AppLogger.token.debug("토큰 캐시 초기화")
     }
 
     // MARK: - Private Methods
@@ -175,25 +171,23 @@ class AgoraTokenService {
         let delay = refreshTime.timeIntervalSinceNow
 
         guard delay > 0 else {
-            // 이미 갱신 시간이 지났으면 즉시 갱신
             refreshToken(channelName: channelName, uid: uid) { _ in }
             return
         }
 
-        print("⏰ 토큰 갱신 예약 - \(Int(delay))초 후")
+        AppLogger.token.debug("토큰 갱신 예약 - \(Int(delay))초 후")
 
         refreshTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             self?.refreshToken(channelName: channelName, uid: uid) { result in
                 switch result {
                 case .success(let response):
-                    // AgoraManager에 새 토큰 알림
                     NotificationCenter.default.post(
                         name: .agoraTokenRefreshed,
                         object: nil,
                         userInfo: ["token": response.token]
                     )
                 case .failure(let error):
-                    print("❌ 자동 토큰 갱신 실패: \(error)")
+                    AppLogger.token.error("자동 토큰 갱신 실패: \(error.localizedDescription)")
                     NotificationCenter.default.post(
                         name: .agoraTokenRefreshFailed,
                         object: nil
@@ -244,6 +238,3 @@ extension Notification.Name {
     static let agoraTokenRefreshed = Notification.Name("agoraTokenRefreshed")
     static let agoraTokenRefreshFailed = Notification.Name("agoraTokenRefreshFailed")
 }
-
-// MARK: - Firebase Database Import
-import FirebaseDatabase

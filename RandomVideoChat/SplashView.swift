@@ -49,36 +49,14 @@ struct SplashView: View {
             .opacity(logoOpacity)
         }
         .onAppear {
-            // 🔍 설치된 폰트 확인 (디버깅용)
             #if DEBUG
-            print("📋 === FONT DEBUG INFO ===")
-            
-            // 다양한 Carter One 폰트 이름 시도
-            let possibleNames = ["CarterOne-Regular", "Carter One", "CarterOne", "Carter-One", "carter-one"]
-            
+            // 폰트 디버깅 - DEBUG 모드에서만 실행
+            let possibleNames = ["CarterOne-Regular", "Carter One", "CarterOne"]
             for name in possibleNames {
                 if let font = UIFont(name: name, size: 16) {
-                    print("✅ FOUND: '\(name)' → actual name: '\(font.fontName)'")
-                } else {
-                    print("❌ NOT FOUND: '\(name)'")
+                    AppLogger.ui.debug("폰트 발견: '\(name)' → \(font.fontName)")
                 }
             }
-            
-            print("📋 All Available Fonts:")
-            for family in UIFont.familyNames.sorted() {
-                let fonts = UIFont.fontNames(forFamilyName: family)
-                if !fonts.isEmpty {
-                    print("Family: \(family)")
-                    for font in fonts {
-                        print("  - \(font)")
-                        // Carter가 포함된 폰트 찾기
-                        if font.lowercased().contains("carter") {
-                            print("    🎯 CARTER FONT FOUND: \(font)")
-                        }
-                    }
-                }
-            }
-            print("📋 === END FONT DEBUG ===")
             #endif
             
             withAnimation(.spring(response: 0.8, dampingFraction: 0.6, blendDuration: 0)) {

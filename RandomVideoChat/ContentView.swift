@@ -51,7 +51,7 @@ struct ContentView: View {
     func checkAuthStatus() {
         // 기존 사용자 확인
         if let user = Auth.auth().currentUser {
-            print("✅ 기존 사용자 발견: \(user.uid)")
+            AppLogger.auth.info("기존 사용자 발견: \(user.uid)")
             UserManager.shared.loadCurrentUser(uid: user.uid)
             isAuthenticated = true
             isCheckingAuth = false
@@ -59,15 +59,13 @@ struct ContentView: View {
             // 자동 익명 로그인
             Auth.auth().signInAnonymously { authResult, error in
                 if let error = error {
-                    print("❌ 자동 익명 로그인 실패: \(error)")
+                    AppLogger.auth.error("자동 익명 로그인 실패", error: error)
                     isCheckingAuth = false
                     return
                 }
-                
+
                 if let user = authResult?.user {
-                    print("✅ 자동 익명 로그인 성공: \(user.uid)")
-                    // createOrUpdateUser 대신 loadCurrentUser 사용
-                    // loadCurrentUser가 내부적으로 문서가 없으면 createUserDocument를 호출함
+                    AppLogger.auth.notice("자동 익명 로그인 성공: \(user.uid)")
                     UserManager.shared.loadCurrentUser(uid: user.uid)
                     isAuthenticated = true
                 }

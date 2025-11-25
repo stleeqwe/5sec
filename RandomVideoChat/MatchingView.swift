@@ -214,7 +214,6 @@ struct MatchingView: View {
                 .onEnded { value in
                     // 아래로 스와이프 감지
                     if value.translation.height > 50 {
-                        print("⬇️ 스와이프 감지 - 매칭 취소")
                         matchingManager.cancelMatching()
                         isPresented = false
                     }
@@ -256,8 +255,7 @@ struct MatchingView: View {
                     if isAllowed {
                         self.matchingManager.startMatching()
                     } else {
-                        // 안전성 검사 실패 시 매칭 중단하고 메인으로 돌아가기
-                        print("❌ 콘텐츠 안전성 검사 실패: \(errorMessage ?? "알 수 없는 오류")")
+                        AppLogger.moderation.warning("콘텐츠 안전성 검사 실패: \(errorMessage ?? "알 수 없는 오류")")
                         self.isPresented = false
                     }
                 }

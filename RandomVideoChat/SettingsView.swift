@@ -8,44 +8,45 @@ struct SettingsView: View {
     @State private var showDeleteAccountAlert = false
     @State private var isDeleting = false
     @StateObject private var userManager = UserManager.shared
-    
+
+    // MARK: - URL Constants
+    private enum URLs {
+        static let terms = URL(string: "https://5sec-terms.web.app/terms")
+        static let privacy = URL(string: "https://5sec-terms.web.app/privacy")
+        static let support = URL(string: "mailto:support@5sec-app.com")
+    }
+
     var body: some View {
         NavigationView {
             List {
                 Section {
                     // 이용약관
-                    Link(destination: URL(string: "https://5sec-terms.web.app/terms")!) {
-                        HStack {
-                            Image(systemName: "doc.text")
-                                .foregroundColor(.blue)
-                            Text("이용약관")
-                            Spacer()
-                            Image(systemName: "arrow.up.right.square")
-                                .foregroundColor(.gray)
+                    if let termsURL = URLs.terms {
+                        Link(destination: termsURL) {
+                            SettingsLinkRow(
+                                icon: "doc.text",
+                                title: "이용약관"
+                            )
                         }
                     }
-                    
+
                     // 개인정보처리방침
-                    Link(destination: URL(string: "https://5sec-terms.web.app/privacy")!) {
-                        HStack {
-                            Image(systemName: "lock.shield")
-                                .foregroundColor(.blue)
-                            Text("개인정보처리방침")
-                            Spacer()
-                            Image(systemName: "arrow.up.right.square")
-                                .foregroundColor(.gray)
+                    if let privacyURL = URLs.privacy {
+                        Link(destination: privacyURL) {
+                            SettingsLinkRow(
+                                icon: "lock.shield",
+                                title: "개인정보처리방침"
+                            )
                         }
                     }
-                    
+
                     // 문의하기
-                    Link(destination: URL(string: "mailto:support@5sec-app.com")!) {
-                        HStack {
-                            Image(systemName: "envelope")
-                                .foregroundColor(.blue)
-                            Text("문의하기")
-                            Spacer()
-                            Image(systemName: "arrow.up.right.square")
-                                .foregroundColor(.gray)
+                    if let supportURL = URLs.support {
+                        Link(destination: supportURL) {
+                            SettingsLinkRow(
+                                icon: "envelope",
+                                title: "문의하기"
+                            )
                         }
                     }
                 } header: {
@@ -98,27 +99,44 @@ struct SettingsView: View {
         isDeleting = true
         let uid = user.uid
         
-        // 1. Firestore 사용자 데이터 삭제
+        // Firestore 사용자 데이터 삭제
         let db = Firestore.firestore()
         db.collection("users").document(uid).delete { error in
             if let error = error {
-                print("❌ Firestore 데이터 삭제 실패: \(error)")
+                AppLogger.user.error("Firestore 데이터 삭제 실패", error: error)
                 isDeleting = false
                 return
             }
-            
-            // 2. Firebase Auth 계정 삭제
+
+            // Firebase Auth 계정 삭제
             user.delete { error in
                 isDeleting = false
-                
+
                 if let error = error {
-                    print("❌ 계정 삭제 실패: \(error)")
+                    AppLogger.auth.error("계정 삭제 실패", error: error)
                 } else {
-                    print("✅ 계정 삭제 완료")
-                    // 메인 화면으로 이동 (로그인 화면으로 자동 이동됨)
+                    AppLogger.auth.notice("계정 삭제 완료")
                     presentationMode.wrappedValue.dismiss()
                 }
             }
+        }
+    }
+}
+
+// MARK: - Settings Link Row Component
+@available(iOS 15.0, *)
+private struct SettingsLinkRow: View {
+    let icon: String
+    let title: String
+
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(.blue)
+            Text(title)
+            Spacer()
+            Image(systemName: "arrow.up.right.square")
+                .foregroundColor(.gray)
         }
     }
 }

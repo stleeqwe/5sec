@@ -1,5 +1,4 @@
 import Foundation
-import os.log
 import Network
 
 #if canImport(FirebasePerformance)
@@ -8,7 +7,6 @@ import FirebasePerformance
 
 class PerformanceMonitor: ObservableObject {
     static let shared = PerformanceMonitor()
-    private let logger = Logger(subsystem: "com.5sec.app", category: "Performance")
 
     // 네트워크 모니터링
     private var networkMonitor: NWPathMonitor?
@@ -38,17 +36,16 @@ class PerformanceMonitor: ObservableObject {
         }
 
         networkMonitor?.start(queue: networkQueue)
-        print("📶 네트워크 모니터링 시작")
+        AppLogger.network.debug("네트워크 모니터링 시작")
     }
 
     func stopNetworkMonitoring() {
         networkMonitor?.cancel()
         networkMonitor = nil
-        print("📶 네트워크 모니터링 중지")
+        AppLogger.network.debug("네트워크 모니터링 중지")
     }
 
     private func updateNetworkStatus(_ path: NWPath) {
-        // 연결 상태
         let wasConnected = isConnected
         isConnected = path.status == .satisfied
 
@@ -69,12 +66,8 @@ class PerformanceMonitor: ObservableObject {
 
         // 상태 변화 로깅
         if wasConnected != isConnected || previousQuality != currentNetworkQuality {
-            print("📶 네트워크 상태 변경:")
-            print("   - 연결: \(isConnected ? "✅" : "❌")")
-            print("   - 타입: \(connectionType.description)")
-            print("   - 품질: \(currentNetworkQuality.description)")
+            AppLogger.network.info("네트워크 상태 변경 - 연결: \(isConnected), 타입: \(connectionType.description), 품질: \(currentNetworkQuality.description)")
 
-            // 품질 변화 알림
             NotificationCenter.default.post(
                 name: .networkQualityChanged,
                 object: nil,
@@ -88,27 +81,21 @@ class PerformanceMonitor: ObservableObject {
             return .unknown
         }
 
-        // 제약 조건 확인
         if path.isConstrained {
-            // 저데이터 모드 또는 제한된 연결
             return .poor
         }
 
         if path.isExpensive {
-            // 셀룰러 또는 비용이 드는 연결
             if path.usesInterfaceType(.cellular) {
-                // 셀룰러는 기본적으로 good으로 평가
                 return .good
             }
             return .good
         }
 
-        // WiFi 연결
         if path.usesInterfaceType(.wifi) {
             return .excellent
         }
 
-        // 유선 연결
         if path.usesInterfaceType(.wiredEthernet) {
             return .excellent
         }
@@ -142,7 +129,7 @@ class PerformanceMonitor: ObservableObject {
             #endif
 
             #if DEBUG
-            print("📊 Query '\(name)' took: \(String(format: "%.2f", timeElapsed * 1000))ms")
+            AppLogger.performance.debug("Query '\(name)' took: \(String(format: "%.2f", timeElapsed * 1000))ms")
             #endif
         }
 
@@ -164,7 +151,7 @@ class PerformanceMonitor: ObservableObject {
         }
 
         if kerr == KERN_SUCCESS {
-            return Double(info.resident_size) / 1024 / 1024 // MB
+            return Double(info.resident_size) / 1024 / 1024
         } else {
             return 0
         }
@@ -196,25 +183,15 @@ class PerformanceMonitor: ObservableObject {
     func logCurrentMetrics() {
         metrics.memoryUsage = getCurrentMemoryUsage()
 
-        logger.info("""
-        📊 Performance Metrics:
-        - Network: \(self.currentNetworkQuality.description)
-        - Avg Matching Time: \(String(format: "%.2f", self.metrics.averageMatchingTime))s
-        - Video Drop Rate: \(String(format: "%.1f", self.metrics.videoCallDropRate))%
-        - Memory Usage: \(String(format: "%.1f", self.metrics.memoryUsage))MB
-        - Matching Success: \(String(format: "%.1f", self.metrics.matchingSuccessRate))%
-        """)
-
-        #if DEBUG
-        print("""
-        📊 Performance Metrics:
+        let metricsLog = """
+        Performance Metrics:
         - Network: \(currentNetworkQuality.description)
         - Avg Matching Time: \(String(format: "%.2f", metrics.averageMatchingTime))s
         - Video Drop Rate: \(String(format: "%.1f", metrics.videoCallDropRate))%
         - Memory Usage: \(String(format: "%.1f", metrics.memoryUsage))MB
         - Matching Success: \(String(format: "%.1f", metrics.matchingSuccessRate))%
-        """)
-        #endif
+        """
+        AppLogger.performance.info(metricsLog)
     }
 
     // MARK: - Automatic Performance Monitoring
